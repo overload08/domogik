@@ -52,7 +52,7 @@ from sqlalchemy.sql.expression import func, extract
 from sqlalchemy.orm import sessionmaker, defer
 from sqlalchemy.orm.session import make_transient
 from sqlalchemy.pool import QueuePool
-from domogik.common.utils import ucode
+from domogik.common.utils import ucode, get_sanitized_hostname
 from domogik.common import logger
 #from domogik.common.packagejson import PackageJson
 from domogik.common.configloader import Loader
@@ -265,7 +265,23 @@ class DbHelper():
 
         """
         return self.__session.query(PluginConfig).all()
-    
+
+    def get_core_config(self):
+        cfg = self.__session.query(PluginConfig).filter_by(type=u'core').all()
+        res = {}
+        for item in cfg:
+            res[item.key] = item.value
+        return res
+   
+    def set_core_config(self, cfg):
+        # DELETE all
+        config_list = self.__session.query(PluginConfig).filter_by(type=u'core').all()
+        for plc in config_list:
+            self.__session.delete(plc)
+        # READD
+        for (key, val) in cfg.items():
+            self.set_plugin_config('core', 'core', get_sanitized_hostname(), key, val)
+
     def list_plugin_config(self, pl_type, pl_id, pl_hostname):
         """Return all parameters of a plugin
 
@@ -1487,7 +1503,7 @@ class DbHelper():
         """
         return self.__session.query(Person).filter_by(id=p_id).first()
 
-    def add_person(self, p_first_name, p_last_name, p_birthdate=None):
+    def add_person(self, p_first_name, p_last_name, p_birthdate=None, p_hasLocation=None):
         """Add a person
 
         @param p_first_name     : first name
@@ -1501,9 +1517,10 @@ class DbHelper():
         person = Person(first_name=p_first_name, last_name=p_last_name, birthdate=p_birthdate)
         self.__session.add(person)
         self._do_commit()
+        self._checkPersonLocation(person, p_hasLocation)
         return person
 
-    def update_person(self, p_id, p_first_name=None, p_last_name=None, p_birthdate=None):
+    def update_person(self, p_id, p_first_name=None, p_last_name=None, p_birthdate=None, p_hasLocation=None):
         """Update a person
 
         @param p_id             : person id to be updated
@@ -1527,7 +1544,52 @@ class DbHelper():
             person.birthdate = p_birthdate
         self.__session.add(person)
         self._do_commit()
+        self._checkPersonLocation(person, p_hasLocation)
         return person
+    
+    def _checkPersonLocation(self, person, hasLocation):
+        # Enable it
+        if hasLocation and person.location_sensor is None:
+            # enable location
+            # add device
+            d_name = "Location {0} {1}".format(person.first_name, person.last_name)
+            dev = Device(d_name, '', 'core.personLocation', 'core', '1.0', info_changed=func.now())
+            self.__session.add(dev)
+            self._do_commit()
+            # add sensor
+            sen = Sensor(name = "GPS coordinates", \
+                            reference = None, \
+                            device_id  = dev.id, \
+                            incremental = 0, \
+                            data_type = 'DT_CoordD', \
+                            conversion = None, \
+                            h_store = 1, \
+                            h_max = None, \
+                            h_expire = None, \
+                            h_round = None, \
+                            h_duplicate = 0, \
+                            formula = None, \
+                            timeout = 0, \
+                            )
+
+            self.__session.add(sen)
+            self._do_commit()
+            # store the sensor id in person.location_sensor
+            person.location_sensor = sen.id
+            self.__session.add(person)
+            self._do_commit()
+        # Disable it
+        elif not hasLocation and person.location_sensor is not None:
+            # TODO disable location
+            senid = person.location_sensor
+            # Update the person
+            person.location_sensor = None
+            self.__session.add(person)
+            self._do_commit()
+            # delete the full device
+            sen = self.__session.query(Sensor).filter_by(id=senid).first()
+            dev = self.__session.query(Device).filter_by(id=sen.device_id).first()
+            self.del_device(dev.id)
 
     def del_person(self, p_id):
         """Delete a person and the associated user account if it exists
@@ -1929,6 +1991,9 @@ class DbHelper():
     def get_location(self, id):
         return self.__session.query(Location).filter_by(id=id).first()
 
+    def get_home_location(self):
+        return self.__session.query(Location).filter_by(isHome=1).first()
+
     def add_full_location(self, name, type, isHome, params):
         loc = self.add_location(name, type, isHome)
         for (key, val) in params.items():
@@ -1969,7 +2034,16 @@ class DbHelper():
         self._do_commit()
         return config
 
-
+    def del_location(self, lid):
+        self.__session.expire_all()
+        loc = self.__session.query(Location).filter_by(id=lid).first()
+        if loc is not None:
+            self.__session.delete(loc)
+            self._do_commit()
+            return loc
+        else:
+            self.__raise_dbhelper_exception("Location with id {0} couldn't be found".format(lid))
+         
 
 ###################
 # Location params

@@ -5,7 +5,7 @@ import json
 import sys
 import os
 import time
-from flask import Flask, g, request
+from flask import Flask, g, request, session
 try:
     from flask_wtf import Form, RecaptchaField
 except ImportError:
@@ -30,30 +30,38 @@ else:
     def is_hidden_field_filter(field):
         return isinstance(field, HiddenField)
 from flask.ext.themes2 import Themes, render_theme_template
+from flask.ext.session import Session
 from werkzeug.exceptions import Unauthorized
 from werkzeug import WWWAuthenticate
 import traceback
 
 ### init Flask
+app = Flask(__name__)
+
+### set Flask Config
+app.jinja_env.globals['bootstrap_is_hidden_field'] = is_hidden_field_filter
+app.jinja_env.add_extension('jinja2.ext.do')
+#app.config['SECRET_KEY'] = '12sfjklghort nvlbneropgtbhni won ouiw'
+app.config['RECAPTCHA_PUBLIC_KEY'] = '6Lfol9cSAAAAADAkodaYl9wvQCwBMr3qGR_PPHcw'
+app.config['BABEL_DEFAULT_TIMEZONE'] = 'Europe/Paris'
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = '/tmp'
+app.config['SESSION_FILE_THRESHOLD'] = 25
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+
+### init extensions and load them
+
+session_manager = Session()
+session_manager.init_app(app)
 
 login_manager = LoginManager()
-babel = Babel()
-
-app = Flask(__name__)
-### next steps...
-
-app.debug = True
 login_manager.init_app(app)
-babel.init_app(app)
-Themes(app, app_identifier='domogik-admin')
 
-app.jinja_env.globals['bootstrap_is_hidden_field'] =\
-    is_hidden_field_filter
-app.jinja_env.add_extension('jinja2.ext.do')
-app.config['SECRET_KEY'] = 'devkey'
-app.config['RECAPTCHA_PUBLIC_KEY'] = \
-'6Lfol9cSAAAAADAkodaYl9wvQCwBMr3qGR_PPHcw'
-app.config['BABEL_DEFAULT_TIMEZONE'] = 'Europe/Paris'
+babel = Babel()
+babel.init_app(app)
+
+Themes(app, app_identifier='domogik-admin')
 
 # jinja 2 filters
 def format_babel_datetime(value, format='medium'):
@@ -265,6 +273,7 @@ from domogik.admin.views.timeline import *
 from domogik.admin.views.battery import *
 from domogik.admin.views.datatypes import *
 from domogik.admin.views.locations import *
+from domogik.admin.views.config import *
 
 ### import all rest urls
 import domogik.admin.rest.status
@@ -276,3 +285,4 @@ from domogik.admin.rest.publish import *
 from domogik.admin.rest.device import *
 from domogik.admin.rest.sensor import sensorAPI
 from domogik.admin.rest.product import *
+from domogik.admin.rest.location import *

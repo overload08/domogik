@@ -39,8 +39,18 @@ import zmq
 import traceback
 import logging
 import ast
+import datetime
+from dateutil import parser
 from domogik.common.utils import ucode
 
+
+
+def to_unicode(data):
+    print(u"to_unicode > type='{0}'".format(type(data)))
+    if isinstance(data, unicode):
+        return data
+    else:
+        return unicode(str(data), "utf-8")
 
 
 class ScenarioInstance(MQAsyncSub):
@@ -240,6 +250,8 @@ class ScenarioInstance(MQAsyncSub):
                 part['type'] = "logic_boolean"
             elif dt_parent == "DT_Number":
                 part['type'] = "math_number"
+            elif dt_parent == "DT_DateTime":
+                part['type'] = "date_time"
             elif dt_parent == "DT_String":
                 part['type'] = "text"
             else:
@@ -283,6 +295,9 @@ class ScenarioInstance(MQAsyncSub):
         # a simple static number
         elif part['type'] == 'math_number':
             retlist.append( pyObj("float(\"{0}\")".format(part['NUM'])) )
+        # a date/time or timestamp
+        elif part['type'] == 'date_time':
+            retlist.append( pyObj("parser.parse(\"{0}\")".format(part['TEXT'])) )
         # a simple text string
         elif part['type'] == 'text':
             retlist.append( pyObj(u"\"{0}\"".format(part['TEXT'])) )
@@ -292,7 +307,8 @@ class ScenarioInstance(MQAsyncSub):
             for ipart, val in sorted(part.items()):
                 if ipart.startswith('ADD'):
                     addp = self.__parse_part(part[ipart], level, debug, parentPart)
-                    reslst.append(u"str({0})".format(addp))
+                    #reslst.append(u"str({0})".format(addp))
+                    reslst.append(u"to_unicode({0})".format(addp))
             retlist.append( pyObj(u" + ".join(reslst)) )
         # get the length of a string
         elif part['type'] == 'text_length':

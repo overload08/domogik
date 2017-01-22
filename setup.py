@@ -92,6 +92,7 @@ setup(
           'Flask-Session',
           'tornado >= 4.2',
           'requests >= 0.12.1',
+          'python-dateutil',
           magic,
           'pyzmq >= 2.2.0',
           'ephem'],
@@ -113,6 +114,7 @@ setup(
             dmg_hub = domogik.bin.hub:main
             dmg_package = domogik.bin.package:main
             dmg_testrunner = domogik.tests.bin.testrunner:main
+            dmg_cron = domogik.bin.cron:main
         """
         ]
     },

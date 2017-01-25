@@ -175,7 +175,11 @@ class DbHelper():
 
     @contextmanager
     def session_scope(self):
-        self.__session = DbHelper.__session_object()
+        if not self.__session:
+            self.__session = DbHelper.__session_object()
+            doclose = True
+        else:
+            doclose = False
         try:
             yield self.__session
             self.__session.commit()
@@ -183,8 +187,9 @@ class DbHelper():
             self.__session.rollback()
             raise
         finally:
-            self.__session.close()
-            self.__session = None
+            if doclose:
+                self.__session.close()
+                self.__session = None
 
     def get_session(self):
         return self.__session
@@ -797,7 +802,7 @@ class DbHelper():
         self._do_commit()
         return device
 
-    def update_device(self, d_id, d_name=None, d_description=None, d_reference=None, d_address=None, d_info_changed=None):
+    def update_device(self, d_id, d_name=None, d_description=None, d_reference=None, d_address=None, d_info_changed=None, d_state=None, d_client_version=None):
         """Update a device item
 
         If a param is None, then the old value will be kept
@@ -827,6 +832,15 @@ class DbHelper():
             device.info_changed = datetime.datetime.fromtimestamp(info_changed)
         else:
             device.info_changed = func.now()
+        if d_state is not None:
+            # can be 
+            # - active      => all OK
+            # - delete      => we want to delete
+            # - deleting    => we are deleting
+            # - upgrade     => needs an upgrade
+            device.state = ucode(d_state)
+        if d_client_version is not None:
+            device.client_version = ucode(d_client_version)
         self.__session.add(device)
         self._do_commit()
         return device

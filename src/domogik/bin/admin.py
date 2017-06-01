@@ -883,6 +883,7 @@ class Admin(Plugin):
                       "client_id" : res.client_id})
 
     def _mdp_reply_devices_create_result(self, data):
+        self.log.info("Request tp create a device over MQ...")
         status = True
         reason = False
         result = False
@@ -913,10 +914,12 @@ class Admin(Plugin):
             if not res:
                 status = False
                 reason = "An error occured while adding the device in database. Please check the file admin.log for more informations"
+                self.log.error(reason)
             else:
                 status = True
                 reason = False
                 result = res
+                self.log.info("Device created")
 
         msg = MQMessage()
         msg.set_action('device.create.result')
@@ -1102,11 +1105,9 @@ class Admin(Plugin):
 
             if frm != None and to == None:
                 values = self._db.list_sensor_history_between(sensor_id, frm)
-                print(values)
 
             else:
-                # TODO
-                values = "TODO"
+                values = self._db.list_sensor_history_between(sensor_id, frm, to)
         
 
         msg.add_data('status', status)
